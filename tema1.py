@@ -1,17 +1,10 @@
-"""
-Dati enter dupa fiecare solutie afisata.
-
-Presupunem ca avem costul de mutare al unui bloc egal cu indicele in alfabet,
-cu indicii incepănd de la 1 (care se calculează prin 1+ diferenta dintre valoarea codului
-ascii al literei blocului de mutat si codul ascii al literei "a" ) .
-Astfel A* are trebui sa prefere drumurile in care se muta intai
-blocurile cu infomatie mai mica lexicografic pentru a ajunge la una dintre starile scop
-
-"""
+# Autor: Surdu Bob Alexandru
+# Grupa 352 , an 2022
+# Exemplu de apelare: python tema1.py fisiere_input fisiere_output 20
 
 import copy
-
-
+import sys
+from os import listdir
 # informatii despre un nod din arborele de parcurgere (nu din graful initial)
 class NodParcurgere:
     def __init__(self, info, parinte, cost=0, h=0):
@@ -30,13 +23,14 @@ class NodParcurgere:
         return l
 
     def afisDrum(self, afisCost=False, afisLung=False):  # returneaza si lungimea drumului
+        global fisier_output
         l = self.obtineDrum()
         for nod in l:
-            print(str(nod))
+            fisier_output.write(str(nod))
         if afisCost:
-            print("Cost: ", self.g)
-        if afisCost:
-            print("Lungime: ", len(l))
+            fisier_output.write("\nCost: " + self.g.__str__())
+        if afisLung:
+            fisier_output.write("\nLungime: " + str(len(l)) + '\n')
         return len(l)
 
     def contineInDrum(self, infoNodNou):
@@ -53,33 +47,24 @@ class NodParcurgere:
         sir += str(self.info)
         return (sir)
 
-    # euristica banală: daca nu e stare scop, returnez 1, altfel 0
-
     def __str__(self):
-        sir = ""
+        sir = "\n"
+        sir += str(len(self.obtineDrum())) + ')\n'
         maxInalt = max([len(stiva) for stiva in self.info])
         for inalt in range(maxInalt, 0, -1):
             for stiva in self.info:
                 if len(stiva) < inalt:
-                    sir += "  ".center(6)
+                    sir += "   ".center(5)
                 else:
-                    sir += str(stiva[inalt - 1]).center(4) + " ".center(2)
+                    sir += ('|' + str(stiva[inalt - 1]) + "| ").center(4)
             sir += "\n"
-        sir += "-" * (2 * len(self.info) - 1)
+        sir += "=" * (4 * len(self.info) + 2)
         return sir
-
-    """
-    def __str__(self):
-        sir=""
-        for stiva in self.info:
-            sir+=(str(stiva))+"\n"
-        sir+="--------------\n"
-        return sir
-    """
 
 
 class Graph:  # graful problemei
     def __init__(self, nume_fisier):
+        global fisier_output
 
         def obtineStive(sir):
             stiveSiruri = sir.strip().split('\n')
@@ -92,7 +77,10 @@ class Graph:  # graful problemei
 
         continutFisier = f.read()  # citesc tot continutul fisierului
         self.start = obtineStive(continutFisier)
-        print("Stare Initiala:", self.start)
+        if not self.testeaza_configuratie_valida(self.start):
+            self.start = []
+            return
+        fisier_output.write("Stare Initiala:" + self.start.__str__())
 
     def testeaza_configuratie_valida(self, infonod):
         stive = infonod
@@ -110,16 +98,15 @@ class Graph:  # graful problemei
         return True
 
     def testeaza_scop(self, nodCurent):
-        valid = self.testeaza_configuratie_valida(nodCurent.info)
         stive = nodCurent.info
 
         last = len(stive[0])
-        i = 0
-        for st in stive:
-            if i != 0 and len(st) > last:
+        for st in stive[1:]:
+            if len(st) > last:
                 return False
+            last = len(st)
 
-        return valid
+        return True
 
     # va genera succesorii sub forma de noduri in arborele de parcurgere
 
@@ -138,6 +125,8 @@ class Graph:  # graful problemei
                     continue
                 stive_n = copy.deepcopy(copie_interm)  # lista noua de stive
                 stive_n[j].append(bloc)  # pun blocul
+                if not self.testeaza_configuratie_valida(stive_n):
+                    continue
                 costMutareBloc = idx
                 if not nodCurent.contineInDrum(stive_n):
                     nod_nou = NodParcurgere(stive_n, nodCurent, cost=nodCurent.g + costMutareBloc,
@@ -152,20 +141,29 @@ class Graph:  # graful problemei
             if self.testeaza_configuratie_valida(infoNod):
                 return 1  # se pune costul minim pe o mutare
             return 0
-        elif tip_euristica == "euristica admisibila 1":
-            euristici = [0]
+        elif tip_euristica == "euristica admisibila 1": # calculeaza cate stive nu au inaltimea necesara pentru
+            euristici = [0]                             # a se indeplini conditia de scop
             last = len(infoNod[0])
             for i in range(1, len(infoNod)):
                 if last < len(infoNod[i]):
-                    euristici[0] += len(infoNod[i]) - last
+                    euristici[0] += 1
 
             return min(euristici)
-        elif tip_euristica == "euristica admisibila 2":
-            euristici = []
+        elif tip_euristica == "euristica admisibila 2": # calculeaza costul mutarii blocurilor pentru a ajunge in stare scop
+            euristici = [0]
+
+            last = len(infoNod[0])
+            for i in range(1, len(infoNod)):
+                if last < len(infoNod[i]):
+                    euristici[0] += (len(infoNod[i]) - last) * i  # i este costul unei mutari de pe stiva cu nr i
 
             return min(euristici)
         else:  # tip_euristica=="euristica neadmisibila"
-            euristici = []
+            euristici = [0]
+
+            inaltimi_stive = [len(st) for st in infoNod]
+
+            euristici[0] = (max(inaltimi_stive) - min(inaltimi_stive)) * len(infoNod)
 
             return max(euristici)
 
@@ -177,19 +175,19 @@ class Graph:  # graful problemei
 
 
 def breadth_first(gr, nrSolutiiCautate):
+    global fisier_output
     # in coada vom avea doar noduri de tip NodParcurgere (nodurile din arborele de parcurgere)
     c = [NodParcurgere(gr.start, None)]
 
     while len(c) > 0:
-        # print("Coada actuala: " + str(c))
+        # fisier_output.write("Coada actuala: " + str(c))
         # input()
         nodCurent = c.pop(0)
 
         if gr.testeaza_scop(nodCurent):
-            print("Solutie:")
+            # fisier_output.write("\nSolutie calculata cu BF:")
             nodCurent.afisDrum(afisCost=True, afisLung=True)
-            print("\n----------------\n")
-            input()
+            fisier_output.write("\n========================================\n")
             nrSolutiiCautate -= 1
             if nrSolutiiCautate == 0:
                 return
@@ -198,6 +196,7 @@ def breadth_first(gr, nrSolutiiCautate):
 
 
 def a_star(gr, nrSolutiiCautate, tip_euristica):
+    global fisier_output
     # in coada vom avea doar noduri de tip NodParcurgere (nodurile din arborele de parcurgere)
     c = [NodParcurgere(gr.start, None, 0, gr.calculeaza_h(gr.start))]
 
@@ -205,10 +204,9 @@ def a_star(gr, nrSolutiiCautate, tip_euristica):
         nodCurent = c.pop(0)
 
         if gr.testeaza_scop(nodCurent):
-            print("Solutie: ")
+            fisier_output.write("Solutie: ")
             nodCurent.afisDrum(afisCost=True, afisLung=True)
-            print("\n----------------\n")
-            input()
+            fisier_output.write("\n========================================\n")
             nrSolutiiCautate -= 1
             if nrSolutiiCautate == 0:
                 return
@@ -220,22 +218,64 @@ def a_star(gr, nrSolutiiCautate, tip_euristica):
                 # diferenta fata de UCS e ca ordonez dupa f
                 if c[i].f >= s.f:
                     gasit_loc = True
-                    break;
+                    break
             if gasit_loc:
                 c.insert(i, s)
             else:
                 c.append(s)
 
 
-gr = Graph("input.txt")
+def ucs(gr, nrSolutiiCautate, tip_euristica):
+    global fisier_output
+    # in coada vom avea doar noduri de tip NodParcurgere (nodurile din arborele de parcurgere)
+    c = [NodParcurgere(gr.start, None, 0, gr.calculeaza_h(gr.start))]
 
-# Rezolvat cu breadth first
+    while len(c) > 0:
+        nodCurent = c.pop(0)
 
-# print("Solutii obtinute cu breadth first:")
-# breadth_first(gr, nrSolutiiCautate=3)
+        if gr.testeaza_scop(nodCurent):
+            fisier_output.write("Solutie: ")
+            nodCurent.afisDrum(afisCost=True, afisLung=True)
+            fisier_output.write("\n========================================\n")
+            nrSolutiiCautate -= 1
+            if nrSolutiiCautate == 0:
+                return
+        lSuccesori = gr.genereazaSuccesori(nodCurent, tip_euristica=tip_euristica)
+        for s in lSuccesori:
+            i = 0
+            gasit_loc = False
+            for i in range(len(c)):
+                if c[i].g >= s.g:
+                    gasit_loc = True
+                    break
+            if gasit_loc:
+                c.insert(i, s)
+            else:
+                c.append(s)
 
 
-print("\n\n##################\nSolutii obtinute cu A*:")
-print("\nObservatie: stivele sunt afisate pe orizontala, cu baza la stanga si varful la dreapta.")
-nrSolutiiCautate = 3
-a_star(gr, nrSolutiiCautate=3, tip_euristica="euristica admisibila 1")
+input_dir = sys.argv[1]
+output_dir = sys.argv[2]
+nsol = int(sys.argv[3])
+timeout = int(sys.argv[4])
+
+fisiere_input = listdir(input_dir)
+fisier_output = None
+
+for f in fisiere_input:
+    cale_fisier_output = output_dir + '/' + f
+    fisier_output = open(cale_fisier_output, 'w')
+    gr = Graph(input_dir + '/' + f)
+
+    if not gr.start:
+        fisier_output.write("Starea initiala este invalida")
+        continue
+
+    fisier_output.write("\nSolutie calculata cu BF:\n")
+    breadth_first(gr, nrSolutiiCautate=nsol)
+
+    fisier_output.write("\nSolutie calculata cu A*:\n")
+    a_star(gr, nrSolutiiCautate=nsol, tip_euristica="euristica admisibila 1")
+
+    fisier_output.write("\nSolutie calculata cu UCS:\n")
+    ucs(gr, nsol, tip_euristica="euristica admisibila 2")
